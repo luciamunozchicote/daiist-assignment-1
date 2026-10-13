@@ -88,14 +88,14 @@ people. The budget, not the cost ratio, is the binding constraint.
 - Count of comorbidities and count of difficulties.
 - Number of unanswered questions.
 
-**Ablation (5-fold CV on the training set, scikit-learn, C = 1):**
+**Ablation (5-fold CV on the training set, scikit-learn, C = 0.1):**
 
 | Feature set | ROC-AUC | PR-AUC |
 |---|---|---|
-| Raw columns (one-hot, no engineering) | 0.8176 ± 0.0097 | 0.3845 ± 0.0051 |
-| **Engineered features (used)** | **0.8191 ± 0.0092** | **0.3895 ± 0.0060** |
-| Engineered, minus non-linear terms | 0.8160 ± 0.0102 | 0.3803 ± 0.0093 |
-| Raw + consequence columns (leaky, not used) | 0.8272 ± 0.0082 | 0.4025 ± 0.0083 |
+| Raw columns (one-hot, no engineering) | 0.8185 ± 0.0103 | 0.3841 ± 0.0056 |
+| **Engineered features (used)** | **0.8193 ± 0.0088** | **0.3888 ± 0.0060** |
+| Engineered, minus non-linear terms | 0.8161 ± 0.0098 | 0.3794 ± 0.0082 |
+| Raw + consequence columns (leaky, not used) | 0.8277 ± 0.0092 | 0.4022 ± 0.0075 |
 
 **Data-quality findings:**
 - **Dummy-variable trap.** With full one-hot encoding, PyTorch and sklearn
@@ -118,7 +118,7 @@ en U) que el modelo no puede construir solo. Y explica por qué quitaste las
 sumas: un modelo lineal ya puede sumar columnas él solo.*
 
 ✍️ *Sé honesta con la tabla de ablación: la mejora del feature engineering es
-pequeña (+0,0015 ROC-AUC, +0,005 PR-AUC), casi dentro del ruido de la
+pequeña (+0,0008 ROC-AUC, +0,005 PR-AUC), casi dentro del ruido de la
 validación cruzada. ¿Por qué crees que pasa? (Pista: las columnas originales
 ya son casi todas categorías, y al pasarlas a one-hot cada nivel recibe su
 propio peso.) Y explica por qué el conjunto "leaky" puntúa más y aun así es

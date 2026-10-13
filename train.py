@@ -4,9 +4,10 @@ Training pipeline: diabetes screening prioritisation (NY State, BRFSS 2022).
 Run with:  uv run python main.py train
 
 1. Load data, define the target, stratified 80/20 train/test split.
-2. Ablation (train set only, 5-fold CV): raw columns vs. engineered features
-   vs. raw + "consequence" columns, to show what feature engineering buys.
-3. Choose L2 strength C by 5-fold CV on the training set.
+2. Choose L2 strength C by 5-fold CV on the training set.
+3. Ablation (train set only, 5-fold CV, same C): raw columns vs. engineered
+   features vs. raw + "consequence" columns, to show what feature
+   engineering buys.
 4. Train the same L2-regularised logistic regression three ways:
    scikit-learn, a manual PyTorch loop, and nn.Module + torch.optim.
 5. Pick the decision threshold from the 10% test-capacity constraint using
@@ -62,32 +63,9 @@ y_train, y_test = y[train_idx], y[test_idx]
 print(f"train {len(train_idx):,} ({y_train.mean():.1%} positive) | test {len(test_idx):,} ({y_test.mean():.1%} positive)")
 
 # ---------------------------------------------------------------------------
-# 2. Ablation: what does feature engineering buy? (train set only)
+# 2. Regularisation strength (the only sklearn hyperparameter we tune)
 # ---------------------------------------------------------------------------
-section("2. Feature-set ablation (5-fold CV on train, sklearn, C=1)")
-# Terms that exist only because the model is linear: squares, cut-offs and
-# a max. Removing them shows what they add on top of the plain columns.
-NONLINEAR_TERMS = ["age_sq", "bmi_sq", "obese", "short_sleep", "long_sleep",
-                   "frequent_physical_distress", "frequent_mental_distress",
-                   "cardiovascular_history"]
-ablation = {}
-for name, X_, prep in [
-    ("raw columns", raw_features(df_train), build_raw_preprocessor),
-    ("engineered features", engineer(df_train), build_preprocessor),
-    ("engineered, minus non-linear terms", engineer(df_train).drop(columns=NONLINEAR_TERMS), build_preprocessor),
-    ("raw + consequence columns (leaky)", raw_features(df_train, include_consequences=True), build_raw_preprocessor),
-]:
-    pipe = make_pipeline(prep(X_), LogisticRegression(C=1.0, max_iter=5000))
-    auc = cross_val_score(pipe, X_, y_train, cv=CV, scoring="roc_auc")
-    ap = cross_val_score(pipe, X_, y_train, cv=CV, scoring="average_precision")
-    ablation[name] = {"roc_auc": float(auc.mean()), "roc_auc_sd": float(auc.std()),
-                      "pr_auc": float(ap.mean()), "pr_auc_sd": float(ap.std())}
-    print(f"{name:38s} ROC-AUC {auc.mean():.4f} ± {auc.std():.4f} | PR-AUC {ap.mean():.4f} ± {ap.std():.4f}")
-
-# ---------------------------------------------------------------------------
-# 3. Regularisation strength (the only sklearn hyperparameter we tune)
-# ---------------------------------------------------------------------------
-section("3. Choose L2 strength C (5-fold CV on train, PR-AUC)")
+section("2. Choose L2 strength C (5-fold CV on train, PR-AUC)")
 X_train_df, X_test_df = engineer(df_train), engineer(df_test)
 c_results = {}
 for C in [0.001, 0.01, 0.1, 1.0, 10.0]:
@@ -100,6 +78,29 @@ for C in [0.001, 0.01, 0.1, 1.0, 10.0]:
 best_score = max(c_results.values())
 BEST_C = min(C for C, s in c_results.items() if s >= best_score - 0.001)
 print(f"-> chosen C = {BEST_C}")
+
+# ---------------------------------------------------------------------------
+# 3. Ablation: what does feature engineering buy? (train set only)
+# ---------------------------------------------------------------------------
+section(f"3. Feature-set ablation (5-fold CV on train, sklearn, C={BEST_C})")
+# Terms that exist only because the model is linear: squares, cut-offs and
+# a max. Removing them shows what they add on top of the plain columns.
+NONLINEAR_TERMS = ["age_sq", "bmi_sq", "obese", "short_sleep", "long_sleep",
+                   "frequent_physical_distress", "frequent_mental_distress",
+                   "cardiovascular_history"]
+ablation = {}
+for name, X_, prep in [
+    ("raw columns", raw_features(df_train), build_raw_preprocessor),
+    ("engineered features", engineer(df_train), build_preprocessor),
+    ("engineered, minus non-linear terms", engineer(df_train).drop(columns=NONLINEAR_TERMS), build_preprocessor),
+    ("raw + consequence columns (leaky)", raw_features(df_train, include_consequences=True), build_raw_preprocessor),
+]:
+    pipe = make_pipeline(prep(X_), LogisticRegression(C=BEST_C, max_iter=5000))
+    auc = cross_val_score(pipe, X_, y_train, cv=CV, scoring="roc_auc")
+    ap = cross_val_score(pipe, X_, y_train, cv=CV, scoring="average_precision")
+    ablation[name] = {"roc_auc": float(auc.mean()), "roc_auc_sd": float(auc.std()),
+                      "pr_auc": float(ap.mean()), "pr_auc_sd": float(ap.std())}
+    print(f"{name:38s} ROC-AUC {auc.mean():.4f} ± {auc.std():.4f} | PR-AUC {ap.mean():.4f} ± {ap.std():.4f}")
 
 # ---------------------------------------------------------------------------
 # 4. Fit preprocessing on train only, then the three models
